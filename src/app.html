@@ -1,0 +1,640 @@
+<title>Bitácora de Molienda</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Public+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: one narrow column like a weighing logbook; a dark "scale readout" summary on top, numbered stations below, tab bar fixed at the bottom. */
+:root {
+  --bg: #eef0ec;
+  --surface: #ffffff;
+  --ink: #1b201c;
+  --muted: #5d685f;
+  --line: #d6dbd3;
+  --accent: #2f5d3a;
+  --accent-ink: #ffffff;
+  --accent-soft: #e1ebdf;
+  --readout: #18201a;
+  --readout-ink: #e4eee0;
+  --readout-dim: #93a596;
+  --ok: #2f7a4a;
+  --warn: #b4541a;
+  --warn-soft: #f8e6d9;
+  --f-display: "Barlow Condensed", "Arial Narrow", system-ui, sans-serif;
+  --f-body: "Public Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --f-num: "JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111412; --surface: #1a1f1b; --ink: #e5ebe3; --muted: #9ba79d; --line: #2c342e;
+    --accent: #8fc288; --accent-ink: #0f1a10; --accent-soft: #223325;
+    --readout: #0a0d0b; --readout-ink: #dcebd6; --readout-dim: #7f9283;
+    --ok: #7fc79a; --warn: #e8a066; --warn-soft: #3a2619; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111412; --surface: #1a1f1b; --ink: #e5ebe3; --muted: #9ba79d; --line: #2c342e;
+  --accent: #8fc288; --accent-ink: #0f1a10; --accent-soft: #223325;
+  --readout: #0a0d0b; --readout-ink: #dcebd6; --readout-dim: #7f9283;
+  --ok: #7fc79a; --warn: #e8a066; --warn-soft: #3a2619; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { background: var(--bg); color: var(--ink); }
+body { font-family: var(--f-body); font-size: 15px; line-height: 1.45; -webkit-tap-highlight-color: transparent; }
+.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; padding-block: 16px calc(88px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 16px; }
+h1, h2, h3 { font-family: var(--f-display); font-weight: 600; margin: 0; text-wrap: balance; letter-spacing: .01em; }
+h1 { font-size: 26px; }
+h2 { font-size: 21px; }
+h3 { font-size: 19px; }
+.num { font-family: var(--f-num); font-variant-numeric: tabular-nums; }
+.lbl { font-family: var(--f-display); font-size: 13px; font-weight: 500; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.top .lbl { color: var(--accent); }
+
+/* Readout */
+.readout { background: var(--readout); color: var(--readout-ink); border-radius: 14px; padding: 16px; display: grid; gap: 14px; }
+.readout .lbl { color: var(--readout-dim); }
+.ro-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.ro-head input[type=date] { background: transparent; color: var(--readout-ink); border: 1px solid #ffffff2a; border-radius: 8px; padding: 6px 8px; font-family: var(--f-num); font-size: 14px; color-scheme: dark; }
+.ro-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 16px; }
+.ro-cell { display: grid; gap: 2px; min-width: 0; }
+.ro-cell b { font-family: var(--f-num); font-size: 26px; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.ro-cell small { color: var(--readout-dim); font-family: var(--f-num); font-size: 12px; }
+.ro-merma { grid-column: 1 / -1; border-top: 1px dashed #ffffff26; padding-top: 12px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.ro-merma b { font-size: 34px; }
+.pct { font-family: var(--f-num); font-size: 15px; font-weight: 600; padding: 4px 10px; border-radius: 99px; background: #ffffff14; color: var(--readout-ink); }
+.readout.alert .pct { background: var(--warn); color: #1a0d04; }
+.ro-msg { margin: 0; font-size: 13px; color: var(--readout-dim); }
+.readout.alert .ro-msg { color: var(--warn); }
+.ro-msg:empty { display: none; }
+
+/* Stations */
+.block { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 16px; display: grid; gap: 14px; }
+.block-h { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.block-h .step { font-family: var(--f-num); font-size: 12px; color: var(--accent); margin-right: 6px; }
+.hint { font-size: 13px; color: var(--muted); }
+.item { display: grid; gap: 10px; padding-top: 14px; border-top: 1px solid var(--line); }
+.item:first-of-type { border-top: 0; padding-top: 0; }
+.item-h { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.field { display: grid; grid-template-columns: 1fr minmax(0, 150px); align-items: center; gap: 10px; }
+.field label { font-size: 14px; color: var(--muted); }
+.field.wide { grid-template-columns: auto 1fr; }
+input[type=text], input[type=number], input:not([type]), textarea, .in {
+  width: 100%; min-width: 0; font: inherit; color: var(--ink); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px;
+}
+input.n { font-family: var(--f-num); text-align: right; }
+textarea { resize: vertical; min-height: 64px; }
+input:focus-visible, textarea:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chips:empty::before { content: attr(data-empty); font-size: 13px; color: var(--muted); }
+.w { display: inline-flex; align-items: center; gap: 2px; font-family: var(--f-num); font-size: 14px; background: var(--accent-soft); color: var(--ink); border-radius: 8px; padding: 4px 4px 4px 10px; font-variant-numeric: tabular-nums; }
+.w .plus { color: var(--muted); margin-right: 2px; }
+.w button { border: 0; background: transparent; color: var(--muted); font-size: 16px; line-height: 1; width: 26px; height: 26px; border-radius: 6px; cursor: pointer; }
+.w button:hover { background: var(--line); color: var(--ink); }
+
+.adder { display: grid; grid-template-columns: 1fr auto; gap: 8px; }
+button { font: inherit; cursor: pointer; }
+.btn { border: 0; border-radius: 10px; padding: 10px 16px; background: var(--accent); color: var(--accent-ink); font-weight: 600; }
+.btn.alt { background: var(--accent-soft); color: var(--ink); }
+.btn.ghost { background: transparent; color: var(--accent); border: 1px dashed var(--line); width: 100%; }
+.btn.danger { background: var(--warn-soft); color: var(--warn); }
+.link { border: 0; background: transparent; color: var(--muted); font-size: 13px; padding: 4px 6px; border-radius: 6px; }
+.link:hover { color: var(--warn); }
+.link.armed { color: var(--warn); font-weight: 600; background: var(--warn-soft); }
+
+.calc { display: grid; grid-template-columns: repeat(auto-fit, minmax(90px, 1fr)); gap: 8px; margin: 0; padding: 10px 12px; background: var(--bg); border-radius: 10px; }
+.calc div { display: grid; gap: 1px; min-width: 0; }
+.calc dt { font-family: var(--f-display); font-size: 12px; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); }
+.calc dd { margin: 0; font-family: var(--f-num); font-size: 15px; font-variant-numeric: tabular-nums; }
+.calc .key dd { font-weight: 600; color: var(--accent); }
+.calc .key dt { color: var(--accent); }
+
+.quick { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.qbtn { border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 99px; padding: 6px 14px; font-family: var(--f-num); font-size: 14px; }
+.qbtn:hover { border-color: var(--accent); color: var(--accent); }
+
+.actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.actions .full { grid-column: 1 / -1; }
+.badge { font-family: var(--f-display); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; padding: 3px 8px; border-radius: 6px; background: var(--warn); color: #1a0d04; }
+
+/* History */
+.sum { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.sum div { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; display: grid; gap: 2px; min-width: 0; }
+.sum b { font-family: var(--f-num); font-size: 17px; font-variant-numeric: tabular-nums; }
+.hist { display: grid; gap: 8px; }
+.hrow { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; text-align: left; width: 100%; background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; color: var(--ink); }
+.hrow:hover { border-color: var(--accent); }
+.hrow .d { font-family: var(--f-display); font-size: 18px; font-weight: 600; }
+.hrow .meta { grid-column: 1; font-size: 13px; color: var(--muted); overflow-wrap: anywhere; }
+.hrow .mp { grid-row: 1 / span 2; grid-column: 2; font-family: var(--f-num); font-weight: 600; padding: 4px 10px; border-radius: 99px; background: var(--accent-soft); color: var(--accent); }
+.hrow .mp.alert { background: var(--warn-soft); color: var(--warn); }
+.empty { text-align: center; color: var(--muted); padding: 24px 8px; }
+
+/* Nav */
+nav.tabs { position: fixed; left: 0; right: 0; bottom: 0; background: var(--surface); border-top: 1px solid var(--line); display: grid; grid-template-columns: repeat(3, 1fr); padding-bottom: env(safe-area-inset-bottom, 0px); z-index: 5; }
+nav.tabs button { border: 0; background: transparent; color: var(--muted); padding: 12px 4px 14px; font-family: var(--f-display); font-size: 16px; font-weight: 600; letter-spacing: .04em; border-top: 3px solid transparent; }
+nav.tabs button[aria-current=page] { color: var(--accent); border-top-color: var(--accent); }
+
+.toast { position: fixed; left: 50%; bottom: calc(76px + env(safe-area-inset-bottom, 0px)); transform: translateX(-50%); background: var(--ink); color: var(--bg); padding: 10px 16px; border-radius: 10px; font-size: 14px; z-index: 9; max-width: calc(100% - 32px); }
+.copybox { width: 100%; min-height: 220px; font-family: var(--f-num); font-size: 13px; }
+.fxs { display: grid; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.fx { display: grid; grid-template-columns: minmax(88px, 1fr) minmax(0, 1.5fr) auto; align-items: center; gap: 10px; padding: 8px 8px 8px 12px; border-top: 1px solid var(--line); }
+.fx:first-child { border-top: 0; }
+.fx .fk { font-size: 13px; color: var(--muted); }
+.fx .fv { font-size: 14px; text-align: right; overflow-wrap: anywhere; }
+.fx.warn .fv { color: var(--warn); }
+.cp { border: 1px solid var(--line); background: var(--surface); color: var(--accent); border-radius: 8px; padding: 4px 10px; font-size: 13px; }
+select.in { appearance: auto; }
+.note { font-size: 13px; color: var(--muted); margin: 0; }
+@media (prefers-reduced-motion: no-preference) { .btn, .qbtn, .hrow { transition: background .15s, border-color .15s, color .15s; } }
+@media (max-width: 380px) { .ro-cell b { font-size: 22px; } .ro-merma b { font-size: 28px; } .sum { grid-template-columns: 1fr 1fr; } }
+</style>
+
+<div class="wrap" id="app"></div>
+<nav class="tabs" aria-label="Secciones">
+  <button type="button" data-tab="registro">Registro</button>
+  <button type="button" data-tab="historial">Historial</button>
+  <button type="button" data-tab="ajustes">Ajustes</button>
+</nav>
+<div class="toast" id="toast" hidden></div>
+
+<script>
+(function () {
+  "use strict";
+  const KEY = "molienda.v1";
+  const $app = document.getElementById("app");
+  let view = "registro";
+  let focusAfter = null;
+  let state = load();
+
+  // ---------- storage ----------
+  function blank() {
+    return { config: { tara: 0.1, limite: null, productos: ["M10", "M14", "M35", "M60"], operador: "", materia: "Pimienta Negra Entera" }, registros: [], actualId: null };
+  }
+  function load() {
+    try {
+      const s = JSON.parse(localStorage.getItem(KEY));
+      if (s && Array.isArray(s.registros)) { s.config = Object.assign(blank().config, s.config); return s; }
+    } catch (e) {}
+    const s = blank();
+    const r = {
+      id: uid(), fecha: "2026-01-05", tara: 0.1, ejemplo: true, notas: "", folio: "05012026-01", loteInterno: "00000000", mpDevuelta: null,
+      lotes: [{ codigo: "LOTE-EJEMPLO", costales: [25, 25, 25, 25] }],
+      productos: [
+        { nombre: "M14", sobranteAnterior: 1, pesadas: [], sobranteFinal: null, presentacion: "Bolsa de 5 kg" },
+        { nombre: "M35", sobranteAnterior: 5, pesadas: [10, 10, 5], sobranteFinal: null, presentacion: "Costal de 10 kg" }
+      ]
+    };
+    s.registros.push(r);
+    s.actualId = r.id;
+    return s;
+  }
+  function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) {} }
+
+  // ---------- helpers ----------
+  function uid() { return Date.now().toString(36) + Math.random().toString(36).slice(2, 7); }
+  function esc(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c])); }
+  function num(s) {
+    if (s == null) return NaN;
+    const t = String(s).trim().replace(",", ".");
+    if (t === "") return NaN;
+    return /^-?\d*\.?\d+$/.test(t) ? parseFloat(t) : NaN;
+  }
+  function parseMany(s) {
+    return String(s).split(/[+\s;]+/).map(num).filter(n => Number.isFinite(n) && n > 0);
+  }
+  const r3 = x => Math.round(x * 1000) / 1000;
+  const sum = a => r3(a.reduce((x, y) => x + y, 0));
+  const f2 = x => (Number.isFinite(x) ? x.toFixed(2) : "—");
+  function hoy() { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); }
+  function fFecha(f, opts) {
+    const d = new Date(f + "T12:00:00");
+    if (isNaN(d)) return f;
+    return d.toLocaleDateString("es-MX", opts || { weekday: "short", day: "numeric", month: "short" });
+  }
+  function fCorta(f) { const [y, m, d] = f.split("-"); return d + "/" + m + "/" + y; }
+  function actual() { return state.registros.find(r => r.id === state.actualId) || null; }
+  function ordenados() { return state.registros.slice().sort((a, b) => (b.fecha + b.id).localeCompare(a.fecha + a.id)); }
+  function nombreP(n) { return "Pimienta Negra " + n; }
+  const PRESENTACIONES = ["A granel / Por kg", "Bolsa de 5 kg", "Bolsas 1 kg", "Costal de 10 kg", "Costal de 20 kg", "Bote de 450 g"];
+  function folioPara(f, excluirId) {
+    const [y, m, d] = f.split("-");
+    const n = state.registros.filter(r => r.fecha === f && r.id !== excluirId && !r.ejemplo).length + 1;
+    return d + m + y + "-" + String(n).padStart(2, "0");
+  }
+  function loteInternoPara(f) {
+    // Semana de lunes a viernes: DD(lunes) DD(viernes) MM(del lunes) AA
+    const d = new Date(f + "T12:00:00"), dow = (d.getDay() + 6) % 7;
+    const lun = new Date(d); lun.setDate(d.getDate() - dow);
+    const vie = new Date(lun); vie.setDate(lun.getDate() + 4);
+    const p2 = x => String(x).padStart(2, "0");
+    return p2(lun.getDate()) + p2(vie.getDate()) + p2(lun.getMonth() + 1) + String(lun.getFullYear()).slice(2);
+  }
+
+  function calc(r) {
+    const tara = Number.isFinite(r.tara) ? r.tara : state.config.tara;
+    const lotes = r.lotes.map(l => {
+      const n = l.costales.length, s = sum(l.costales), t = r3(n * tara);
+      return { n, suma: s, tara: t, neto: r3(s - t) };
+    });
+    const prods = r.productos.map(p => {
+      const b = sum(p.pesadas), so = Number.isFinite(p.sobranteAnterior) ? p.sobranteAnterior : 0;
+      const pend = !p.pesadas.length;
+      return { bruto: b, sob: so, neto: pend ? 0 : r3(b - so), pend };
+    });
+    const D = sum(lotes.map(l => l.neto));
+    const C = sum(prods.map(p => p.neto));
+    const mpDev = Number.isFinite(r.mpDevuelta) ? r.mpDevuelta : 0;
+    const netos = r3(D - mpDev);
+    const merma = r3(netos - C);
+    const pct = D > 0 ? (merma / D) * 100 : null;
+    const lim = state.config.limite;
+    const faltan = r.productos.filter((p, i) => prods[i].pend).map(p => p.nombre);
+    const alerta = pct != null && ((Number.isFinite(lim) && pct > lim) || merma < 0);
+    return { tara, lotes, prods, D, C, merma, pct, alerta, faltan, mpDev, netos };
+  }
+
+  // ---------- note text ----------
+  function nota(r) {
+    const c = calc(r), L = [];
+    L.push("Producción DIARIA — " + fCorta(r.fecha));
+    const sob = r.productos.filter(p => Number.isFinite(p.sobranteAnterior) && p.sobranteAnterior > 0);
+    if (sob.length) {
+      L.push("", "Sobrante anterior (kg)");
+      sob.forEach(p => L.push("• " + nombreP(p.nombre) + ": " + f2(p.sobranteAnterior)));
+    }
+    L.push("", "Costales (−" + f2(c.tara) + " kg c/u)");
+    r.lotes.forEach((l, i) => {
+      const k = c.lotes[i];
+      L.push("• Lote: " + (l.codigo || "(sin código)"));
+      if (l.costales.length) L.push("  " + l.costales.map(f2).join(" + ") + " = " + f2(k.suma) + " − " + f2(k.tara) + " = " + f2(k.neto));
+    });
+    L.push("• Total (D) = " + f2(c.D) + " kg");
+    if (c.mpDev) L.push("• MP sin procesar (regresa a inventario) = −" + f2(c.mpDev) + " kg");
+    L.push("", "Producto terminado");
+    r.productos.forEach((p, i) => {
+      const k = c.prods[i];
+      L.push("• " + nombreP(p.nombre) + (p.presentacion ? " (" + p.presentacion + ")" : ""));
+      L.push("  Total bruto = " + (p.pesadas.length ? p.pesadas.map(f2).join(" + ") + " = " : "") + f2(k.bruto));
+      if (k.sob) L.push("  Sobrante anterior = −" + f2(k.sob));
+      L.push("  Total neto = " + (k.pend ? "(pendiente)" : f2(k.neto)));
+    });
+    L.push("", "PIMIENTA PROCESADA (C) = " + f2(c.C) + " kg");
+    L.push("MERMA (D − " + (c.mpDev ? "MP sin procesar − " : "") + "C) = " + f2(c.merma) + " kg" + (c.pct != null ? " (" + c.pct.toFixed(2) + " %)" : ""));
+    const fin = r.productos.filter(p => Number.isFinite(p.sobranteFinal) && p.sobranteFinal > 0);
+    if (fin.length) {
+      L.push("", "Sobrante para la siguiente molienda (kg)");
+      fin.forEach(p => L.push("• " + nombreP(p.nombre) + ": " + f2(p.sobranteFinal)));
+    }
+    if (r.notas && r.notas.trim()) L.push("", "Notas: " + r.notas.trim());
+    return L.join("\n");
+  }
+
+  // ---------- views ----------
+  function render() {
+    document.querySelectorAll("nav.tabs button").forEach(b => b.setAttribute("aria-current", b.dataset.tab === view ? "page" : "false"));
+    if (view === "registro") $app.innerHTML = vRegistro();
+    else if (view === "historial") $app.innerHTML = vHistorial();
+    else $app.innerHTML = vAjustes();
+    if (view === "registro") updateOut();
+    if (focusAfter) { const el = document.getElementById(focusAfter); if (el) el.focus(); focusAfter = null; }
+  }
+
+  function vRegistro() {
+    const r = actual();
+    if (!r) {
+      return '<div class="top"><h1>Bitácora de Molienda</h1></div>' +
+        '<div class="block empty"><p>No hay registro abierto.</p><button class="btn" data-act="nuevo">Empezar molienda de hoy</button></div>';
+    }
+    const c = calc(r);
+    const usados = new Set(r.productos.map(p => p.nombre));
+    const libres = state.config.productos.filter(p => !usados.has(p));
+    let h = '<div class="top"><div><div class="lbl">Producción diaria</div><h1>Bitácora de Molienda</h1></div>' +
+      (r.ejemplo ? '<span class="badge">Ejemplo</span>' : "") + "</div>";
+
+    h += '<section class="readout" id="readout"><div class="ro-head"><span class="lbl">Fecha</span>' +
+      '<input type="date" id="fecha" data-field="fecha" value="' + esc(r.fecha) + '"></div>' +
+      '<div class="ro-grid">' +
+      '<div class="ro-cell"><span class="lbl">Entrada (D)</span><b data-out="D"></b><small>kg costales netos</small></div>' +
+      '<div class="ro-cell"><span class="lbl">Procesada (C)</span><b data-out="C"></b><small>kg producto neto</small></div>' +
+      '<div class="ro-cell ro-merma"><div style="display:grid;gap:2px"><span class="lbl" data-out="mlbl">Merma (D − C)</span><b class="num" data-out="merma"></b></div><span class="pct" data-out="pct"></span></div>' +
+      '</div><p class="ro-msg" data-out="msg"></p></section>';
+
+    // Station 1: costales
+    h += '<section class="block"><div class="block-h"><h2><span class="step">01</span>Costales</h2><span class="hint">Tara <span class="num">' + f2(c.tara) + '</span> kg por costal</span></div>';
+    r.lotes.forEach((l, i) => {
+      h += '<div class="item"><div class="field wide"><label for="lote-' + i + '">Lote</label>' +
+        '<input id="lote-' + i + '" class="num" autocomplete="off" autocapitalize="characters" data-field="lote" data-i="' + i + '" value="' + esc(l.codigo) + '" placeholder="Código del lote"></div>' +
+        '<div class="chips" data-empty="Aún no hay costales pesados.">' +
+        l.costales.map((w, j) => '<span class="w">' + (j ? '<span class="plus">+</span>' : "") + f2(w) + '<button type="button" aria-label="Quitar ' + f2(w) + '" data-act="del-costal" data-i="' + i + '" data-j="' + j + '">×</button></span>').join("") +
+        '</div><div class="adder"><input id="add-costal-' + i + '" class="n" inputmode="decimal" autocomplete="off" placeholder="Peso del costal (kg)" data-enter="add-costal" data-i="' + i + '">' +
+        '<button type="button" class="btn" data-act="add-costal" data-i="' + i + '">Agregar</button></div>' +
+        '<dl class="calc"><div><dt>Costales</dt><dd data-out="ln-' + i + '"></dd></div><div><dt>Suma</dt><dd data-out="ls-' + i + '"></dd></div>' +
+        '<div><dt>Tara</dt><dd data-out="lt-' + i + '"></dd></div><div class="key"><dt>Neto</dt><dd data-out="le-' + i + '"></dd></div></dl>' +
+        (r.lotes.length > 1 ? '<div><button type="button" class="link" data-act="del-lote" data-i="' + i + '">Quitar este lote</button></div>' : "") +
+        "</div>";
+    });
+    h += '<button type="button" class="btn ghost" data-act="add-lote">+ Costales de otro lote</button>' +
+      '<div class="field"><label for="mpdev">Pimienta entera sin moler que regresa (kg)</label><input id="mpdev" class="n" inputmode="decimal" autocomplete="off" data-field="mpdev" value="' + (Number.isFinite(r.mpDevuelta) ? r.mpDevuelta : "") + '" placeholder="0"></div></section>';
+
+    // Station 2: producto terminado
+    h += '<section class="block"><div class="block-h"><h2><span class="step">02</span>Producto terminado</h2><span class="hint">Neto = bruto − sobrante anterior</span></div>';
+    if (!r.productos.length) h += '<p class="note">Agrega la pimienta que salió de esta molienda.</p>';
+    r.productos.forEach((p, i) => {
+      h += '<div class="item"><div class="item-h"><h3>' + esc(nombreP(p.nombre)) + '</h3>' +
+        '<button type="button" class="link" data-act="del-prod" data-i="' + i + '">Quitar</button></div>' +
+        '<div class="field"><label for="pres-' + i + '">Empaque final</label><select id="pres-' + i + '" class="in" data-field="pres" data-i="' + i + '">' +
+        ['<option value="">Sin definir</option>'].concat(PRESENTACIONES.map(x => '<option' + (p.presentacion === x ? " selected" : "") + ">" + esc(x) + "</option>")).join("") + "</select></div>" +
+        '<div class="field"><label for="sob-' + i + '">Sobrante anterior (kg)</label><input id="sob-' + i + '" class="n" inputmode="decimal" autocomplete="off" data-field="sob" data-i="' + i + '" value="' + (Number.isFinite(p.sobranteAnterior) ? p.sobranteAnterior : "") + '" placeholder="0"></div>' +
+        '<div class="chips" data-empty="Pesadas de producto: aún no hay.">' +
+        p.pesadas.map((w, j) => '<span class="w">' + (j ? '<span class="plus">+</span>' : "") + f2(w) + '<button type="button" aria-label="Quitar ' + f2(w) + '" data-act="del-pesada" data-i="' + i + '" data-j="' + j + '">×</button></span>').join("") +
+        '</div><div class="adder"><input id="add-pesada-' + i + '" class="n" inputmode="decimal" autocomplete="off" placeholder="Peso (kg)" data-enter="add-pesada" data-i="' + i + '">' +
+        '<button type="button" class="btn" data-act="add-pesada" data-i="' + i + '">Agregar</button></div>' +
+        '<dl class="calc"><div><dt>Bruto</dt><dd data-out="pb-' + i + '"></dd></div><div><dt>Sobrante</dt><dd data-out="ps-' + i + '"></dd></div>' +
+        '<div class="key"><dt>Neto</dt><dd data-out="pn-' + i + '"></dd></div></dl>' +
+        '<div class="field"><label for="fin-' + i + '">Sobrante para la siguiente (kg)</label><input id="fin-' + i + '" class="n" inputmode="decimal" autocomplete="off" data-field="fin" data-i="' + i + '" value="' + (Number.isFinite(p.sobranteFinal) ? p.sobranteFinal : "") + '" placeholder="0"></div>' +
+        "</div>";
+    });
+    h += '<div class="item"><span class="lbl">Agregar pimienta</span><div class="quick">' +
+      libres.map(n => '<button type="button" class="qbtn" data-act="add-prod" data-n="' + esc(n) + '">+ ' + esc(n) + "</button>").join("") +
+      '</div><div class="adder"><input id="nuevo-prod" autocomplete="off" autocapitalize="characters" placeholder="Otra (ej. M20)" data-enter="add-prod-otro"><button type="button" class="btn alt" data-act="add-prod-otro">Agregar</button></div></div>';
+    h += "</section>";
+
+    // Notes + actions
+    h += '<section class="block"><div class="block-h"><h2><span class="step">03</span>Cierre</h2></div>' +
+      '<div class="field"><label for="folio">Folio de producción</label><input id="folio" class="n" autocomplete="off" data-field="folio" value="' + esc(r.folio || "") + '"></div>' +
+      '<div class="field"><label for="loteint">Lote interno</label><input id="loteint" class="n" autocomplete="off" inputmode="numeric" data-field="loteint" value="' + esc(r.loteInterno || "") + '"></div>' +
+      '<label class="lbl" for="notas">Notas</label><textarea id="notas" data-field="notas" placeholder="Observaciones de la molienda">' + esc(r.notas || "") + "</textarea>" +
+      '<div class="actions"><button type="button" class="btn" data-act="copiar">Copiar nota</button><button type="button" class="btn alt" data-act="compartir">Compartir</button>' +
+      '<button type="button" class="btn ghost full" data-act="nuevo">Nueva molienda (pasa los sobrantes)</button></div>' +
+      '<div id="copywrap" hidden><p class="note">Copia el texto manualmente:</p><textarea id="copybox" class="copybox" readonly></textarea></div></section>';
+    h += '<section class="block" id="ficha"></section>';
+    return h;
+  }
+
+  function updateOut() {
+    const r = actual(); if (!r) return;
+    const c = calc(r);
+    const set = (k, v) => { const el = $app.querySelector('[data-out="' + k + '"]'); if (el) el.textContent = v; };
+    set("D", f2(c.D)); set("C", f2(c.C)); set("merma", f2(c.merma) + " kg");
+    set("pct", c.pct != null ? c.pct.toFixed(2) + " %" : "— %");
+    let msg = "";
+    if (c.merma < 0 && c.D > 0) msg = "Salió más producto del que entró. Revisa pesos y sobrantes.";
+    else if (c.alerta) msg = "La merma pasa el límite de " + state.config.limite + " %.";
+    else if (!c.D) msg = "Agrega los costales para calcular la merma.";
+    else if (c.faltan.length) msg = "Falta pesar: " + c.faltan.join(", ") + ". La merma todavía no es final.";
+    if (!msg && r.lotes.filter(l => l.costales.length).length > 1) msg = "Hay varios lotes: en Trazabilidad cada lote de materia prima va en su propio folio.";
+    set("msg", msg);
+    set("mlbl", c.mpDev ? "Merma (D − MP sin moler − C)" : "Merma (D − C)");
+    const fi = document.getElementById("ficha"); if (fi) fi.innerHTML = vFicha(r, c);
+    const ro = document.getElementById("readout"); if (ro) ro.classList.toggle("alert", c.alerta);
+    c.lotes.forEach((l, i) => { set("ln-" + i, l.n); set("ls-" + i, f2(l.suma)); set("lt-" + i, "−" + f2(l.tara)); set("le-" + i, f2(l.neto)); });
+    c.prods.forEach((p, i) => { set("pb-" + i, f2(p.bruto)); set("ps-" + i, "−" + f2(p.sob)); set("pn-" + i, p.pend ? "pendiente" : f2(p.neto)); });
+  }
+
+  function vHistorial() {
+    const rs = ordenados();
+    let h = '<div class="top"><div><div class="lbl">Moliendas guardadas</div><h1>Historial</h1></div></div>';
+    if (!rs.length) return h + '<div class="block empty">Todavía no hay moliendas. Ve a Registro para empezar la de hoy.</div>';
+    const mes = hoy().slice(0, 7);
+    const delMes = rs.filter(r => r.fecha.slice(0, 7) === mes && !r.ejemplo);
+    const base = delMes.length ? delMes : rs;
+    let D = 0, C = 0; base.forEach(r => { const c = calc(r); D += c.D; C += c.C; });
+    const p = D > 0 ? ((D - C) / D) * 100 : null;
+    h += '<div class="lbl">' + (delMes.length ? "Este mes · " + delMes.length + " moliendas" : "Todas las moliendas") + "</div>" +
+      '<div class="sum"><div><span class="lbl">Entrada</span><b>' + f2(r3(D)) + '</b></div><div><span class="lbl">Procesada</span><b>' + f2(r3(C)) +
+      '</b></div><div><span class="lbl">Merma</span><b>' + (p != null ? p.toFixed(2) + " %" : "—") + "</b></div></div>";
+    h += '<div class="hist">' + rs.map(r => {
+      const c = calc(r);
+      const lotes = r.lotes.map(l => l.codigo).filter(Boolean).join(", ") || "Sin lote";
+      const prods = r.productos.map(x => x.nombre).join(" · ");
+      return '<button type="button" class="hrow" data-act="abrir" data-id="' + r.id + '"><span class="d">' + esc(fFecha(r.fecha)) + (r.ejemplo ? ' <span class="badge">Ejemplo</span>' : "") +
+        '</span><span class="mp' + (c.alerta ? " alert" : "") + '">' + (c.pct != null ? c.pct.toFixed(2) + " %" : "—") + "</span>" +
+        '<span class="meta"><span class="num">' + esc(lotes) + "</span><br>D " + f2(c.D) + " · C " + f2(c.C) + (prods ? " · " + esc(prods) : "") + "</span></button>";
+    }).join("") + "</div>";
+    return h;
+  }
+
+  function vAjustes() {
+    const cf = state.config;
+    const r = actual();
+    return '<div class="top"><div><div class="lbl">Configuración</div><h1>Ajustes</h1></div></div>' +
+      '<section class="block"><h2>Cálculos</h2>' +
+      '<div class="field"><label for="cf-tara">Tara por costal (kg)</label><input id="cf-tara" class="n" inputmode="decimal" data-cfg="tara" value="' + cf.tara + '"></div>' +
+      '<div class="field"><label for="cf-lim">Límite de merma (%)</label><input id="cf-lim" class="n" inputmode="decimal" data-cfg="limite" value="' + (Number.isFinite(cf.limite) ? cf.limite : "") + '" placeholder="Sin límite"></div>' +
+      '<div class="field"><label for="cf-op">Operador / responsable</label><input id="cf-op" data-cfg="operador" value="' + esc(cf.operador || "") + '" placeholder="Tu nombre"></div>' +
+      '<div class="field"><label for="cf-mat">Materia prima</label><input id="cf-mat" data-cfg="materia" value="' + esc(cf.materia || "") + '"></div>' +
+      '<p class="note">La tara nueva se usa en las moliendas que empieces después. Las guardadas conservan la suya.</p></section>' +
+      '<section class="block"><h2>Pimientas frecuentes</h2><p class="note">Aparecen como botones rápidos en Registro.</p><div class="chips">' +
+      cf.productos.map((n, i) => '<span class="w">' + esc(n) + '<button type="button" aria-label="Quitar ' + esc(n) + '" data-act="del-cfgprod" data-i="' + i + '">×</button></span>').join("") +
+      '</div><div class="adder"><input id="cf-prod" autocomplete="off" autocapitalize="characters" placeholder="Ej. M20" data-enter="add-cfgprod"><button type="button" class="btn alt" data-act="add-cfgprod">Agregar</button></div></section>' +
+      '<section class="block"><h2>Respaldo</h2><p class="note">Los datos se guardan solo en este celular. Descarga un respaldo de vez en cuando.</p>' +
+      '<div class="actions"><button type="button" class="btn alt" data-act="exp-json">Descargar respaldo</button><button type="button" class="btn alt" data-act="exp-csv">Exportar CSV</button>' +
+      '<label class="btn ghost full" for="imp" style="text-align:center">Restaurar desde respaldo</label><input type="file" id="imp" accept="application/json,.json" hidden></div></section>' +
+      '<section class="block"><h2>Borrar</h2><div class="actions">' +
+      (r ? '<button type="button" class="link full" data-act="del-reg" style="justify-self:start">Borrar la molienda abierta (' + esc(fCorta(r.fecha)) + ")</button>" : "") +
+      '<button type="button" class="link full" data-act="del-ejemplo" style="justify-self:start">Borrar moliendas de ejemplo</button>' +
+      '<button type="button" class="link full" data-act="del-todo" style="justify-self:start">Borrar todos los datos</button></div></section>';
+  }
+
+  function vFicha(r, c) {
+    const cf = state.config;
+    const loteMP = (r.lotes.find(l => l.costales.length) || r.lotes[0] || {}).codigo || "";
+    const fila = (k, v, opts) => '<div class="fx' + (opts && opts.warn ? " warn" : "") + '"><span class="fk">' + k + '</span><span class="fv num">' + esc(v === "" || v == null ? "—" : v) + "</span>" +
+      (v === "" || v == null ? "<span></span>" : '<button type="button" class="cp" data-act="copiar-campo" data-v="' + esc(v) + '" aria-label="Copiar ' + esc(k) + '">Copiar</button>') + "</div>";
+    let h = '<div class="block-h"><h2><span class="step">04</span>Para Trazabilidad</h2><span class="hint">Registrar producción / molienda</span></div>' +
+      '<p class="note">Los campos van en el mismo orden que en el sistema.</p><div class="lbl">Datos generales de producción</div><div class="fxs">' +
+      fila("Folio de producción", r.folio || "") +
+      fila("Lote de materia prima", loteMP) +
+      fila("Materia prima", cf.materia || "") +
+      fila("Kilos de MP utilizados", f2(c.D)) +
+      fila("Sobrante de MP sin procesar", f2(c.mpDev)) +
+      fila("Merma real de la corrida", f2(c.merma), { warn: c.merma < 0 }) +
+      fila("Fecha", r.fecha) +
+      fila("Operador / responsable", cf.operador || "") +
+      fila("Observaciones generales", (r.notas || "").trim()) + "</div>";
+    r.productos.forEach((p, i) => {
+      const k = c.prods[i];
+      h += '<div class="lbl">Producto ' + (i + 1) + '</div><div class="fxs">' +
+        fila("Producto", nombreP(p.nombre)) +
+        fila("Kilos producidos hoy", k.pend ? "" : f2(k.neto), { warn: k.pend }) +
+        fila("Lote interno", r.loteInterno || "") +
+        fila("Presentación final", p.presentacion || "") + "</div>";
+    });
+    const cuadre = r3(c.netos - c.C - c.merma);
+    h += '<p class="note">Cuadre: ' + f2(c.D) + " − " + f2(c.mpDev) + " = " + f2(c.netos) + " kg netos = " + f2(c.C) + " producidos + " + f2(c.merma) + " merma" + (Math.abs(cuadre) < 0.01 ? " ✓" : "") + "</p>";
+    return h;
+  }
+  function ultimaPres(n) {
+    for (const r of ordenados()) { const p = r.productos.find(x => x.nombre === n && x.presentacion); if (p) return p.presentacion; }
+    return "";
+  }
+  async function copiarCampo(v) {
+    try { await navigator.clipboard.writeText(v); toast("Copiado: " + v); } catch (e) { toast(v); }
+  }
+
+  // ---------- actions ----------
+  let armed = null, armTimer = null;
+  function confirmTap(btn, label) {
+    const k = btn.dataset.act + (btn.dataset.i || "");
+    if (armed === k) { armed = null; clearTimeout(armTimer); return true; }
+    armed = k; btn.dataset.txt = btn.textContent; btn.textContent = label || "Toca otra vez para confirmar"; btn.classList.add("armed");
+    clearTimeout(armTimer);
+    armTimer = setTimeout(() => { armed = null; if (btn.isConnected) { btn.textContent = btn.dataset.txt; btn.classList.remove("armed"); } }, 3000);
+    return false;
+  }
+  function toast(t) {
+    const el = document.getElementById("toast"); el.textContent = t; el.hidden = false;
+    clearTimeout(toast.t); toast.t = setTimeout(() => (el.hidden = true), 2200);
+  }
+
+  function nuevo() {
+    const prev = ordenados()[0];
+    const f = hoy();
+    const existe = state.registros.find(r => r.fecha === f && !r.ejemplo);
+    if (existe && existe.id !== state.actualId) { state.actualId = existe.id; view = "registro"; save(); render(); toast("Ya había una molienda de hoy. Te la abrí."); return; }
+    const productos = prev ? prev.productos.filter(p => Number.isFinite(p.sobranteFinal) && p.sobranteFinal > 0)
+      .map(p => ({ nombre: p.nombre, sobranteAnterior: p.sobranteFinal, pesadas: [], sobranteFinal: null })) : [];
+    const codigo = prev && prev.lotes.length ? prev.lotes[prev.lotes.length - 1].codigo : "";
+    productos.forEach(p => { const o = prev.productos.find(x => x.nombre === p.nombre); p.presentacion = (o && o.presentacion) || ""; });
+    const r = { id: uid(), fecha: f, tara: state.config.tara, notas: "", folio: folioPara(f), loteInterno: loteInternoPara(f), mpDevuelta: null, lotes: [{ codigo, costales: [] }], productos };
+    state.registros.push(r); state.actualId = r.id; view = "registro"; save(); render();
+    toast(productos.length ? "Nueva molienda con " + productos.length + " sobrante(s) del registro anterior" : "Nueva molienda");
+  }
+
+  function addWeights(list, inputId) {
+    const el = document.getElementById(inputId);
+    const vals = parseMany(el ? el.value : "");
+    if (!vals.length) { if (el) { el.focus(); toast("Escribe un peso válido, por ejemplo 24.85"); } return false; }
+    vals.forEach(v => list.push(r3(v)));
+    focusAfter = inputId; return true;
+  }
+
+  function download(name, text, type) {
+    try {
+      const a = document.createElement("a");
+      a.href = URL.createObjectURL(new Blob([text], { type }));
+      a.download = name; document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    } catch (e) { toast("No se pudo descargar en este navegador"); }
+  }
+  function csv() {
+    const rows = [["fecha", "lotes", "costales", "entrada_D_kg", "producto", "bruto_kg", "sobrante_anterior_kg", "neto_kg", "sobrante_final_kg", "procesada_C_kg", "merma_kg", "merma_pct"]];
+    ordenados().forEach(r => {
+      const c = calc(r);
+      const lotes = r.lotes.map(l => l.codigo).join(" | "), n = c.lotes.reduce((a, l) => a + l.n, 0);
+      const base = [r.fecha, lotes, n, f2(c.D)];
+      const tail = [f2(c.C), f2(c.merma), c.pct != null ? c.pct.toFixed(2) : ""];
+      if (!r.productos.length) rows.push(base.concat(["", "", "", "", ""], tail));
+      r.productos.forEach((p, i) => rows.push(base.concat([p.nombre, f2(c.prods[i].bruto), f2(c.prods[i].sob), f2(c.prods[i].neto), Number.isFinite(p.sobranteFinal) ? f2(p.sobranteFinal) : ""], tail)));
+    });
+    return rows.map(r => r.map(v => /[",\n]/.test(String(v)) ? '"' + String(v).replace(/"/g, '""') + '"' : v).join(",")).join("\n");
+  }
+
+  async function copiar(text) {
+    try { await navigator.clipboard.writeText(text); toast("Nota copiada"); return; } catch (e) {}
+    const w = document.getElementById("copywrap"), b = document.getElementById("copybox");
+    if (w && b) { b.value = text; w.hidden = false; b.focus(); b.select(); }
+  }
+
+  $app.addEventListener("click", e => {
+    const b = e.target.closest("[data-act]"); if (!b) return;
+    const act = b.dataset.act, i = +b.dataset.i, j = +b.dataset.j, r = actual();
+    switch (act) {
+      case "nuevo": nuevo(); return;
+      case "add-costal": if (addWeights(r.lotes[i].costales, "add-costal-" + i)) break; return;
+      case "del-costal": r.lotes[i].costales.splice(j, 1); break;
+      case "add-lote": r.lotes.push({ codigo: "", costales: [] }); focusAfter = "lote-" + (r.lotes.length - 1); break;
+      case "del-lote": if (!confirmTap(b, "¿Quitar lote? Toca otra vez")) return; r.lotes.splice(i, 1); break;
+      case "add-pesada": if (addWeights(r.productos[i].pesadas, "add-pesada-" + i)) break; return;
+      case "del-pesada": r.productos[i].pesadas.splice(j, 1); break;
+      case "add-prod": r.productos.push({ nombre: b.dataset.n, sobranteAnterior: null, pesadas: [], sobranteFinal: null, presentacion: ultimaPres(b.dataset.n) }); focusAfter = "add-pesada-" + (r.productos.length - 1); break;
+      case "add-prod-otro": {
+        const el = document.getElementById("nuevo-prod"); const n = el.value.trim().toUpperCase().replace(/^PIMIENTA\s+/, "");
+        if (!n) { el.focus(); return; }
+        if (r.productos.some(p => p.nombre === n)) { toast(n + " ya está en esta molienda"); return; }
+        r.productos.push({ nombre: n, sobranteAnterior: null, pesadas: [], sobranteFinal: null, presentacion: ultimaPres(n) });
+        if (!state.config.productos.includes(n)) state.config.productos.push(n);
+        focusAfter = "add-pesada-" + (r.productos.length - 1); break;
+      }
+      case "del-prod": if (!confirmTap(b, "¿Quitar? Toca otra vez")) return; r.productos.splice(i, 1); break;
+      case "copiar": copiar(nota(r)); return;
+      case "copiar-campo": copiarCampo(b.dataset.v); return;
+      case "compartir": {
+        const t = nota(r);
+        if (navigator.share) { navigator.share({ title: "Molienda " + fCorta(r.fecha), text: t }).catch(() => {}); }
+        else copiar(t);
+        return;
+      }
+      case "abrir": state.actualId = b.dataset.id; view = "registro"; save(); render(); window.scrollTo(0, 0); return;
+      case "add-cfgprod": {
+        const el = document.getElementById("cf-prod"); const n = el.value.trim().toUpperCase().replace(/^PIMIENTA\s+/, "");
+        if (n && !state.config.productos.includes(n)) state.config.productos.push(n);
+        focusAfter = "cf-prod"; break;
+      }
+      case "del-cfgprod": state.config.productos.splice(i, 1); break;
+      case "exp-json": download("molienda-respaldo-" + hoy() + ".json", JSON.stringify(state, null, 2), "application/json"); return;
+      case "exp-csv": download("molienda-" + hoy() + ".csv", "﻿" + csv(), "text/csv"); return;
+      case "del-reg": if (!confirmTap(b)) return; state.registros = state.registros.filter(x => x.id !== state.actualId); state.actualId = (ordenados()[0] || {}).id || null; toast("Molienda borrada"); break;
+      case "del-ejemplo": state.registros = state.registros.filter(x => !x.ejemplo); if (!actual()) state.actualId = (ordenados()[0] || {}).id || null; toast("Ejemplos borrados"); break;
+      case "del-todo": if (!confirmTap(b, "Se borra todo. Toca otra vez")) return; state = blank(); toast("Datos borrados"); break;
+      default: return;
+    }
+    save(); render();
+  });
+
+  $app.addEventListener("keydown", e => {
+    if (e.key !== "Enter") return;
+    const el = e.target.closest("[data-enter]"); if (!el) return;
+    e.preventDefault();
+    const btn = $app.querySelector('[data-act="' + el.dataset.enter + '"]' + (el.dataset.i != null ? '[data-i="' + el.dataset.i + '"]' : ""));
+    if (btn) btn.click();
+  });
+
+  $app.addEventListener("input", e => {
+    const el = e.target, r = actual();
+    if (el.dataset.cfg) {
+      const v = num(el.value);
+      if (el.dataset.cfg === "operador" || el.dataset.cfg === "materia") state.config[el.dataset.cfg] = el.value.trim();
+      else if (el.dataset.cfg === "tara") { if (Number.isFinite(v) && v >= 0) state.config.tara = v; }
+      else state.config.limite = Number.isFinite(v) ? v : null;
+      save(); return;
+    }
+    if (!r || !el.dataset.field) return;
+    const i = +el.dataset.i, v = num(el.value);
+    switch (el.dataset.field) {
+      case "fecha": if (el.value) { r.fecha = el.value; if (!r.folioManual) { r.folio = folioPara(r.fecha, r.id); const f = document.getElementById("folio"); if (f) f.value = r.folio; } } break;
+      case "lote": r.lotes[i].codigo = el.value.trim(); break;
+      case "sob": r.productos[i].sobranteAnterior = Number.isFinite(v) ? v : null; break;
+      case "fin": r.productos[i].sobranteFinal = Number.isFinite(v) ? v : null; break;
+      case "notas": r.notas = el.value; break;
+      case "mpdev": r.mpDevuelta = Number.isFinite(v) ? v : null; break;
+      case "pres": r.productos[i].presentacion = el.value; break;
+      case "folio": r.folio = el.value.trim(); r.folioManual = true; break;
+      case "loteint": r.loteInterno = el.value.trim(); break;
+    }
+    save(); updateOut();
+  });
+
+  $app.addEventListener("change", e => {
+    if (e.target.id !== "imp" || !e.target.files[0]) return;
+    const fr = new FileReader();
+    fr.onload = () => {
+      try {
+        const s = JSON.parse(fr.result);
+        if (!s || !Array.isArray(s.registros) || !s.config) throw 0;
+        state = s; save(); render(); toast("Respaldo restaurado: " + s.registros.length + " moliendas");
+      } catch (err) { toast("Ese archivo no es un respaldo de la bitácora"); }
+    };
+    fr.readAsText(e.target.files[0]);
+  });
+
+  document.querySelector("nav.tabs").addEventListener("click", e => {
+    const b = e.target.closest("[data-tab]"); if (!b) return;
+    view = b.dataset.tab; render(); window.scrollTo(0, 0);
+  });
+
+  window.__molienda = { calc, nota, parseMany };
+  render();
+})();
+</script>
